@@ -173,7 +173,9 @@ def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _convert_to_example(filename, image_buffer, label, synset, human, bbox,
+#def _convert_to_example(filename, image_buffer, label, synset, human, bbox,
+#                        height, width):
+def _convert_to_example(filename, image_buffer, synset, bbox,
                         height, width):
   """Build an Example proto for an example.
 
@@ -201,25 +203,25 @@ def _convert_to_example(filename, image_buffer, label, synset, human, bbox,
     [l.append(point) for l, point in zip([xmin, ymin, xmax, ymax], b)]
     # pylint: enable=expression-not-assigned
 
-  colorspace = 'RGB'
+  colorspace = b'RGB'
   channels = 3
-  image_format = 'JPEG'
+  image_format = b'JPEG'
 
   example = tf.train.Example(features=tf.train.Features(feature={
       'image/height': _int64_feature(height),
       'image/width': _int64_feature(width),
       'image/colorspace': _bytes_feature(colorspace),
       'image/channels': _int64_feature(channels),
-      'image/class/label': _int64_feature(label),
-      'image/class/synset': _bytes_feature(synset),
-      'image/class/text': _bytes_feature(human),
+      #'image/class/label': _int64_feature(label),
+      'image/class/synset': _bytes_feature(synset.encode()),
+      #'image/class/text': _bytes_feature(human),
       'image/object/bbox/xmin': _float_feature(xmin),
       'image/object/bbox/xmax': _float_feature(xmax),
       'image/object/bbox/ymin': _float_feature(ymin),
       'image/object/bbox/ymax': _float_feature(ymax),
-      'image/object/bbox/label': _int64_feature([label] * len(xmin)),
+#      'image/object/bbox/label': _int64_feature([label] * len(xmin)),
       'image/format': _bytes_feature(image_format),
-      'image/filename': _bytes_feature(os.path.basename(filename)),
+      'image/filename': _bytes_feature(os.path.basename(filename).encode()),
       'image/encoded': _bytes_feature(image_buffer)}))
   return example
 
@@ -312,7 +314,7 @@ def _process_image(filename, coder):
     width: integer, image width in pixels.
   """
   # Read the image file.
-  with tf.gfile.FastGFile(filename, 'r') as f:
+  with tf.gfile.FastGFile(filename, 'rb') as f:
     image_data = f.read()
 
   # Clean the dirty data.
@@ -337,8 +339,10 @@ def _process_image(filename, coder):
   return image_data, height, width
 
 
-def _process_image_files_batch(coder, thread_index, ranges, name, filenames,
-                               synsets, labels, humans, bboxes, num_shards):
+#def _process_image_files_batch(coder, thread_index, ranges, name, filenames,
+#                               synsets, labels, humans, bboxes, num_shards):
+def _process_image_files_batch(coder, thread_index, ranges, name, filenames, 
+                               synsets, bboxes):
   """Processes and saves list of images as TFRecord in 1 thread.
 
   Args:
@@ -359,58 +363,70 @@ def _process_image_files_batch(coder, thread_index, ranges, name, filenames,
   # Each thread produces N shards where N = int(num_shards / num_threads).
   # For instance, if num_shards = 128, and the num_threads = 2, then the first
   # thread would produce shards [0, 64).
+
+  num_shards = 1000
   num_threads = len(ranges)
   assert not num_shards % num_threads
-  num_shards_per_batch = int(num_shards / num_threads)
+  #num_shards_per_batch = int(num_shards / num_threads)
 
-  shard_ranges = np.linspace(ranges[thread_index][0],
-                             ranges[thread_index][1],
-                             num_shards_per_batch + 1).astype(int)
-  num_files_in_thread = ranges[thread_index][1] - ranges[thread_index][0]
-
+ # shard_ranges = np.linspace(ranges[thread_index][0],
+ #                            ranges[thread_index][1],
+ #                            num_shards_per_batch + 1).astype(int)
+  #num_files_in_thread = ranges[thread_index][1] - ranges[thread_index][0]
+  num_shards = ranges[thread_index][1] - ranges[thread_index][0]
   counter = 0
-  for s in range(num_shards_per_batch):
+  #for s in range(num_shards_per_batch):
+  for s in range(ranges[thread_index][0], ranges[thread_index][1]):
     # Generate a sharded version of the file name, e.g. 'train-00002-of-00010'
-    shard = thread_index * num_shards_per_batch + s
-    output_filename = '%s-%.5d-of-%.5d' % (name, shard, num_shards)
+    #shard = thread_index * num_shards_per_batch + s
+    #output_filename = '%s-%.5d-of-%.5d' % (name, shard, num_shards)
+    synset = synsets[s]
+    output_filename = synset
     output_file = os.path.join(FLAGS.output_directory, output_filename)
     writer = tf.python_io.TFRecordWriter(output_file)
 
-    shard_counter = 0
-    files_in_shard = np.arange(shard_ranges[s], shard_ranges[s + 1], dtype=int)
-    for i in files_in_shard:
-      filename = filenames[i]
-      label = labels[i]
-      synset = synsets[i]
-      human = humans[i]
-      bbox = bboxes[i]
+   # shard_counter = 0
+   # files_in_shard = np.arange(shard_ranges[s], shard_ranges[s + 1], dtype=int)
+   # for i in files_in_shard:
+   #   filename = filenames[i]
+   #   label = labels[i]
+   #   synset = synsets[i]
+   #   human = humans[i]
+   #   bbox = bboxes[i]
+    for filename, bbox in zip(filenames[synset], bboxes[synset]):
 
+      #image_buffer, height, width = _process_image(filename, coder)
       image_buffer, height, width = _process_image(filename, coder)
 
-      example = _convert_to_example(filename, image_buffer, label,
-                                    synset, human, bbox,
+     # example = _convert_to_example(filename, image_buffer, label,
+     #                               synset, human, bbox,
+     #                               height, width)
+      example = _convert_to_example(filename, image_buffer,
+                                    synset, bbox,
                                     height, width)
       writer.write(example.SerializeToString())
-      shard_counter += 1
-      counter += 1
+      #shard_counter += 1
 
-      if not counter % 1000:
-        print('%s [thread %d]: Processed %d of %d images in thread batch.' %
-              (datetime.now(), thread_index, counter, num_files_in_thread))
-        sys.stdout.flush()
+     # if not counter % 1000:
+     #   print('%s [thread %d]: Processed %d of %d images in thread batch.' %
+     #         (datetime.now(), thread_index, counter, num_files_in_thread))
+     #   sys.stdout.flush()
 
     writer.close()
-    print('%s [thread %d]: Wrote %d images to %s' %
-          (datetime.now(), thread_index, shard_counter, output_file))
+  #  print('%s [thread %d]: Wrote %d images to %s' %
+  #        (datetime.now(), thread_index, shard_counter, output_file))
+    counter += 1
+    print("Wrote %d shards out of %d" % (counter, num_shards))
     sys.stdout.flush()
-    shard_counter = 0
-  print('%s [thread %d]: Wrote %d images to %d shards.' %
-        (datetime.now(), thread_index, counter, num_files_in_thread))
+  #  shard_counter = 0
+#  print('%s [thread %d]: Wrote %d images to %d shards.' %
+#        (datetime.now(), thread_index, counter, num_files_in_thread))
   sys.stdout.flush()
 
 
-def _process_image_files(name, filenames, synsets, labels, humans,
-                         bboxes, num_shards):
+#def _process_image_files(name, filenames, synsets, labels, humans,
+#                         bboxes, num_shards):
+def _process_image_files(name, filenames, synsets, bboxes):
   """Process and save list of images as TFRecord of Example protos.
 
   Args:
@@ -424,13 +440,14 @@ def _process_image_files(name, filenames, synsets, labels, humans,
       box annotations for the image.
     num_shards: integer number of shards for this data set.
   """
-  assert len(filenames) == len(synsets)
-  assert len(filenames) == len(labels)
-  assert len(filenames) == len(humans)
-  assert len(filenames) == len(bboxes)
+#  assert len(filenames) == len(synsets)
+#  assert len(filenames) == len(labels)
+#  assert len(filenames) == len(humans)
+#  assert len(filenames) == len(bboxes)
 
   # Break all images into batches with a [ranges[i][0], ranges[i][1]].
-  spacing = np.linspace(0, len(filenames), FLAGS.num_threads + 1).astype(np.int)
+  #spacing = np.linspace(0, len(filenames), FLAGS.num_threads + 1).astype(np.int)
+  spacing = np.linspace(0, len(filenames.keys()), FLAGS.num_threads + 1).astype(np.int)
   ranges = []
   threads = []
   for i in range(len(spacing) - 1):
@@ -448,8 +465,9 @@ def _process_image_files(name, filenames, synsets, labels, humans,
 
   threads = []
   for thread_index in range(len(ranges)):
-    args = (coder, thread_index, ranges, name, filenames,
-            synsets, labels, humans, bboxes, num_shards)
+   # args = (coder, thread_index, ranges, name, filenames,
+   #         synsets, labels, humans, bboxes, num_shards)
+    args = (coder, thread_index, ranges, name, filenames, synsets, bboxes)
     t = threading.Thread(target=_process_image_files_batch, args=args)
     t.start()
     threads.append(t)
@@ -499,9 +517,9 @@ def _find_image_files(data_dir, labels_file):
   challenge_synsets = [l.strip() for l in
                        tf.gfile.FastGFile(labels_file, 'r').readlines()]
 
-  labels = []
-  filenames = []
-  synsets = []
+  #labels = {}
+  filenames = {}
+  #synsets = []
 
   # Leave label index 0 empty as a background class.
   label_index = 1
@@ -511,9 +529,10 @@ def _find_image_files(data_dir, labels_file):
     jpeg_file_path = '%s/%s/*.JPEG' % (data_dir, synset)
     matching_files = tf.gfile.Glob(jpeg_file_path)
 
-    labels.extend([label_index] * len(matching_files))
-    synsets.extend([synset] * len(matching_files))
-    filenames.extend(matching_files)
+    #labels.extend([label_index] * len(matching_files))
+    #synsets.extend([synset] * len(matching_files))
+    filenames[synset] = matching_files
+    #filenames.extend(matching_files)
 
     if not label_index % 100:
       print('Finished finding files in %d of %d classes.' % (
@@ -523,17 +542,17 @@ def _find_image_files(data_dir, labels_file):
   # Shuffle the ordering of all image files in order to guarantee
   # random ordering of the images with respect to label in the
   # saved TFRecord files. Make the randomization repeatable.
-  shuffled_index = list(range(len(filenames)))
-  random.seed(12345)
-  random.shuffle(shuffled_index)
+  #shuffled_index = list(range(len(filenames)))
+  #random.seed(12345)
+  #random.shuffle(shuffled_index)
 
-  filenames = [filenames[i] for i in shuffled_index]
-  synsets = [synsets[i] for i in shuffled_index]
-  labels = [labels[i] for i in shuffled_index]
-
-  print('Found %d JPEG files across %d labels inside %s.' %
-        (len(filenames), len(challenge_synsets), data_dir))
-  return filenames, synsets, labels
+  #filenames = [filenames[i] for i in shuffled_index]
+  #synsets = [synsets[i] for i in shuffled_index]
+  #labels = [labels[i] for i in shuffled_index]
+  num_files_per_synset = [len(filenames[synset]) for synset in challenge_synsets]
+  num_files = sum(num_files_per_synset)
+  print('Found %d JPEG files across %d labels inside %s.' % (num_files, len(challenge_synsets), data_dir))
+  return filenames, challenge_synsets#, synsets, labels
 
 
 def _find_human_readable_labels(synsets, synset_to_human):
@@ -567,16 +586,31 @@ def _find_image_bounding_boxes(filenames, image_to_bboxes):
     box annotations for the image.
   """
   num_image_bbox = 0
-  bboxes = []
-  for f in filenames:
-    basename = os.path.basename(f)
-    if basename in image_to_bboxes:
-      bboxes.append(image_to_bboxes[basename])
-      num_image_bbox += 1
-    else:
-      bboxes.append([])
+  total_images = 0
+  bboxes = {}
+  for sysnet in filenames.keys():
+    curr_bboxes = []
+    for f in filenames[sysnet]:
+      basename = os.path.basename(f)
+      total_images += 1
+      if basename in image_to_bboxes:
+        curr_bboxes.append(image_to_bboxes[basename])
+        num_image_bbox += 1
+      else:
+        curr_bboxes.append([])
+    bboxes[sysnet] = curr_bboxes
+
+#  for f in filenames:
+#    basename = os.path.basename(f)
+#    if basename in image_to_bboxes:
+#      bboxes.append(image_to_bboxes[basename])
+#      num_image_bbox += 1
+#    else:
+#      bboxes.append([])
+#  print('Found %d images with bboxes out of %d images' % (
+#      num_image_bbox, len(filenames)))
   print('Found %d images with bboxes out of %d images' % (
-      num_image_bbox, len(filenames)))
+      num_image_bbox, total_images))
   return bboxes
 
 
@@ -593,11 +627,14 @@ def _process_dataset(name, directory, num_shards, synset_to_human,
     image_to_bboxes: dictionary mapping image file names to a list of
       bounding boxes. This list contains 0+ bounding boxes.
   """
-  filenames, synsets, labels = _find_image_files(directory, FLAGS.labels_file)
-  humans = _find_human_readable_labels(synsets, synset_to_human)
+  #filenames, synsets, labels = _find_image_files(directory, FLAGS.labels_file)
+  filenames, synsets = _find_image_files(directory, FLAGS.labels_file)
+  #humans = _find_human_readable_labels(synsets, synset_to_human)
   bboxes = _find_image_bounding_boxes(filenames, image_to_bboxes)
-  _process_image_files(name, filenames, synsets, labels,
-                       humans, bboxes, num_shards)
+ #   _process_image_files(name, filenames, synsets, labels,
+ #                        humans, bboxes, num_shards)
+  print(synsets)
+  _process_image_files(name, filenames, synsets, bboxes)
 
 
 def _build_synset_lookup(imagenet_metadata_file):
@@ -693,8 +730,8 @@ def main(unused_argv):
   image_to_bboxes = _build_bounding_box_lookup(FLAGS.bounding_box_file)
 
   # Run it!
-  _process_dataset('validation', FLAGS.validation_directory,
-                   FLAGS.validation_shards, synset_to_human, image_to_bboxes)
+ # _process_dataset('validation', FLAGS.validation_directory,
+ #                  FLAGS.validation_shards, synset_to_human, image_to_bboxes)
   _process_dataset('train', FLAGS.train_directory, FLAGS.train_shards,
                    synset_to_human, image_to_bboxes)
 

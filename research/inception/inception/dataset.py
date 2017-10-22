@@ -34,7 +34,7 @@ import tensorflow as tf
 FLAGS = tf.app.flags.FLAGS
 
 # Basic model parameters.
-tf.app.flags.DEFINE_string('data_dir', '/tmp/mydata',
+tf.app.flags.DEFINE_string('data_dir', '/home/mostafa/imagenet_data',
                            """Path to the processed data, i.e. """
                            """TFRecord of Example protos.""")
 
@@ -81,7 +81,7 @@ class Dataset(object):
     Raises:
       ValueError: if there are not data_files matching the subset.
     """
-    tf_record_pattern = os.path.join(FLAGS.data_dir, '%s-*' % self.subset)
+    tf_record_pattern = os.path.join(FLAGS.data_dir, 'n*')
     data_files = tf.gfile.Glob(tf_record_pattern)
     if not data_files:
       print('No files found for dataset %s/%s at %s' % (self.name,

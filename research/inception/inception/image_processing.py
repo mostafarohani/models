@@ -45,7 +45,7 @@ import tensorflow as tf
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_integer('batch_size', 32,
-                            """Number of images to process in a batch.""")
+                             """Number of images to process in a batch.""")
 tf.app.flags.DEFINE_integer('image_size', 299,
                             """Provide square images of this size.""")
 tf.app.flags.DEFINE_integer('num_preprocess_threads', 4,
@@ -146,8 +146,9 @@ def decode_jpeg(image_buffer, scope=None):
   Returns:
     3-D float Tensor with values ranging from [0, 1).
   """
-  with tf.name_scope(values=[image_buffer], name=scope,
-                     default_name='decode_jpeg'):
+ # with tf.name_scope(values=[image_buffer], name=scope,
+ #                    default_name='decode_jpeg'):
+  with tf.variable_scope('decode_jpeg'):
     # Decode the string as an RGB JPEG.
     # Note that the resulting image contains an unknown height and width
     # that is set dynamically by decode_jpeg. In other words, the height
@@ -176,7 +177,8 @@ def distort_color(image, thread_id=0, scope=None):
   Returns:
     color-distorted image
   """
-  with tf.name_scope(values=[image], name=scope, default_name='distort_color'):
+  #with tf.name_scope(values=[image], name=scope, default_name='distort_color'):
+  with tf.variable_scope('distort_color'):
     color_ordering = thread_id % 2
 
     if color_ordering == 0:
@@ -214,8 +216,9 @@ def distort_image(image, height, width, bbox, thread_id=0, scope=None):
   Returns:
     3-D float Tensor of distorted image used for training.
   """
-  with tf.name_scope(values=[image, height, width, bbox], name=scope,
-                     default_name='distort_image'):
+ # with tf.name_scope(values=[image, height, width, bbox], name=scope,
+ #                  default_name='distort_image'):
+  with tf.variable_scope('distort_image'):
     # Each bounding box has shape [1, num_boxes, box coords] and
     # the coordinates are ordered [ymin, xmin, ymax, xmax].
 
@@ -287,8 +290,9 @@ def eval_image(image, height, width, scope=None):
   Returns:
     3-D float Tensor of prepared image.
   """
-  with tf.name_scope(values=[image, height, width], name=scope,
-                     default_name='eval_image'):
+ # with tf.name_scope(values=[image, height, width], name=scope,
+ #                    default_name='eval_image'):
+  with tf.variable_scope('eval_image'):
     # Crop the central region of the image with an area containing 87.5% of
     # the original image.
     image = tf.image.central_crop(image, central_fraction=0.875)
@@ -326,7 +330,8 @@ def image_preprocessing(image_buffer, bbox, train, thread_id=0):
   width = FLAGS.image_size
 
   if train:
-    image = distort_image(image, height, width, bbox, thread_id)
+   # image = distort_image(image, height, width, bbox, thread_id)
+    image = distort_image(image, height, width, thread_id)
   else:
     image = eval_image(image, height, width)
 
@@ -375,8 +380,8 @@ def parse_example_proto(example_serialized):
   feature_map = {
       'image/encoded': tf.FixedLenFeature([], dtype=tf.string,
                                           default_value=''),
-      'image/class/label': tf.FixedLenFeature([1], dtype=tf.int64,
-                                              default_value=-1),
+    #  'image/class/label': tf.FixedLenFeature([1], dtype=tf.int64,
+    #                                          default_value=-1),
       'image/class/text': tf.FixedLenFeature([], dtype=tf.string,
                                              default_value=''),
   }
@@ -389,7 +394,7 @@ def parse_example_proto(example_serialized):
                                    'image/object/bbox/ymax']})
 
   features = tf.parse_single_example(example_serialized, feature_map)
-  label = tf.cast(features['image/class/label'], dtype=tf.int32)
+  #label = tf.cast(features['image/class/label'], dtype=tf.int32)
 
   xmin = tf.expand_dims(features['image/object/bbox/xmin'].values, 0)
   ymin = tf.expand_dims(features['image/object/bbox/ymin'].values, 0)
@@ -404,34 +409,36 @@ def parse_example_proto(example_serialized):
   bbox = tf.expand_dims(bbox, 0)
   bbox = tf.transpose(bbox, [0, 2, 1])
 
-  return features['image/encoded'], label, bbox, features['image/class/text']
+  # return features['image/encoded'], label, bbox, features['image/class/text']
+  return features['image/encoded'], bbox, features['image/class/text']
 
 
 def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
                  num_readers=1):
-  """Contruct batches of training or evaluation examples from the image dataset.
+  """contruct batches of training or evaluation examples from the image dataset.
 
-  Args:
-    dataset: instance of Dataset class specifying the dataset.
-      See dataset.py for details.
+  args:
+    dataset: instance of dataset class specifying the dataset.
+      see dataset.py for details.
     batch_size: integer
     train: boolean
     num_preprocess_threads: integer, total number of preprocessing threads
     num_readers: integer, number of parallel readers
 
-  Returns:
-    images: 4-D float Tensor of a batch of images
-    labels: 1-D integer Tensor of [batch_size].
+  returns:
+    images: 4-d float tensor of a batch of images
+    labels: 1-d integer tensor of [batch_size].
 
-  Raises:
-    ValueError: if data is not found
+  raises:
+    valueerror: if data is not found
   """
-  with tf.name_scope('batch_processing'):
+  #with tf.name_scope('batch_processing'):
+  with tf.variable_scope('batch_processing'):
     data_files = dataset.data_files()
     if data_files is None:
-      raise ValueError('No data files found for this dataset')
+      raise valueerror('no data files found for this dataset')
 
-    # Create filename_queue
+    # create filename_queue
     if train:
       filename_queue = tf.train.string_input_producer(data_files,
                                                       shuffle=True,
@@ -444,22 +451,22 @@ def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
       num_preprocess_threads = FLAGS.num_preprocess_threads
 
     if num_preprocess_threads % 4:
-      raise ValueError('Please make num_preprocess_threads a multiple '
+      raise valueerror('please make num_preprocess_threads a multiple '
                        'of 4 (%d % 4 != 0).', num_preprocess_threads)
 
     if num_readers is None:
       num_readers = FLAGS.num_readers
 
     if num_readers < 1:
-      raise ValueError('Please make num_readers at least 1')
+      raise ValueError('please make num_readers at least 1')
 
-    # Approximate number of examples per shard.
+    # approximate number of examples per shard.
     examples_per_shard = 1024
-    # Size the random shuffle queue to balance between good global
+    # size the random shuffle queue to balance between good global
     # mixing (more examples) and memory use (fewer examples).
-    # 1 image uses 299*299*3*4 bytes = 1MB
-    # The default input_queue_memory_factor is 16 implying a shuffling queue
-    # size: examples_per_shard * 16 * 1MB = 17.6GB
+    # 1 image uses 299*299*3*4 bytes = 1mb
+    # the default input_queue_memory_factor is 16 implying a shuffling queue
+    # size: examples_per_shard * 16 * 1mb = 17.6gb
     min_queue_examples = examples_per_shard * FLAGS.input_queue_memory_factor
     if train:
       examples_queue = tf.RandomShuffleQueue(
@@ -467,11 +474,11 @@ def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
           min_after_dequeue=min_queue_examples,
           dtypes=[tf.string])
     else:
-      examples_queue = tf.FIFOQueue(
+      examples_queue = tf.FifoQueue(
           capacity=examples_per_shard + 3 * batch_size,
           dtypes=[tf.string])
 
-    # Create multiple readers to populate the queue of examples.
+    # create multiple readers to populate the queue of examples.
     if num_readers > 1:
       enqueue_ops = []
       for _ in range(num_readers):
@@ -480,7 +487,7 @@ def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
         enqueue_ops.append(examples_queue.enqueue([value]))
 
       tf.train.queue_runner.add_queue_runner(
-          tf.train.queue_runner.QueueRunner(examples_queue, enqueue_ops))
+          tf.train.queue_runner.queuerunner(examples_queue, enqueue_ops))
       example_serialized = examples_queue.dequeue()
     else:
       reader = dataset.reader()
@@ -488,7 +495,7 @@ def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
 
     images_and_labels = []
     for thread_id in range(num_preprocess_threads):
-      # Parse a serialized Example proto to extract the image and metadata.
+      # parse a serialized example proto to extract the image and metadata.
       image_buffer, label_index, bbox, _ = parse_example_proto(
           example_serialized)
       image = image_preprocessing(image_buffer, bbox, train, thread_id)
@@ -499,7 +506,7 @@ def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
         batch_size=batch_size,
         capacity=2 * num_preprocess_threads * batch_size)
 
-    # Reshape images into these desired dimensions.
+    # reshape images into these desired dimensions.
     height = FLAGS.image_size
     width = FLAGS.image_size
     depth = 3
@@ -507,7 +514,7 @@ def batch_inputs(dataset, batch_size, train, num_preprocess_threads=None,
     images = tf.cast(images, tf.float32)
     images = tf.reshape(images, shape=[batch_size, height, width, depth])
 
-    # Display the training images in the visualizer.
+    # display the training images in the visualizer.
     tf.summary.image('images', images)
 
     return images, tf.reshape(label_index_batch, [batch_size])
